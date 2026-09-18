@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Sora", "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  /* Guard Provider brand — deep navy */
+  --color-brand-50: #eef3fb;
+  --color-brand-100: #d9e4f4;
+  --color-brand-200: #b4c9e6;
+  --color-brand-300: #84a4d2;
+  --color-brand-400: #537cb5;
+  --color-brand-500: #35609b;
+  --color-brand-600: #274b7d;
+  --color-brand-700: #203c64;
+  --color-brand-800: #1b2c48;
+  --color-brand-900: #142138;
+  --color-brand-950: #0c1526;
+
+  /* Signal gold accent */
+  --color-accent-100: #fdf0d3;
+  --color-accent-200: #f9dfa3;
+  --color-accent-300: #f4c762;
+  --color-accent-400: #f2b33d;
+  --color-accent-500: #e79e1b;
+  --color-accent-600: #c5820e;
+  --color-accent-700: #9c660b;
+
+  --animate-fade-up: fade-up 0.45s ease-out both;
+  --animate-fade-in: fade-in 0.3s ease-out both;
+
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-slate-50 text-slate-800 antialiased;
+    font-family: var(--font-sans);
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    @apply text-slate-900;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-brand-500);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .container-app {
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+  .section-pad {
+    @apply py-16 sm:py-20;
+  }
+}
