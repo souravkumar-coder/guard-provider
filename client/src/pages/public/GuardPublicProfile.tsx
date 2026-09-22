@@ -98,7 +98,7 @@ export function GuardPublicProfile() {
                     <div className="rounded-full ring-4 ring-white">
                       <Avatar name={g.user.name} size="xl" src={g.user.avatarUrl} />
                     </div>
-                    <div className="pb-1">
+                      <div className="min-w-0 pb-1">
                       <div className="flex items-center gap-2">
                         <h1 className="font-display text-2xl font-bold text-slate-900">{g.user.name}</h1>
                         {g.verificationStatus === 'verified' && (

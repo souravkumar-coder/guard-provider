@@ -39,7 +39,7 @@ export function LandingHero({ services }: LandingHeroProps) {
             <ShieldCheck className="size-3.5" aria-hidden />
             Verified guards · Transparent ratings · Direct requests
           </p>
-          <h1 className="mt-6 font-display text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
+          <h1 className="mt-6 font-display text-4xl font-extrabold leading-tight tracking-tight text-white sm:text-5xl lg:text-6xl">
             Professional security,
             <span className="text-accent-400"> on demand.</span>
           </h1>
