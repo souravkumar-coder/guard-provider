@@ -19,6 +19,9 @@
     "start": "npm run start -w server",
     "typecheck": "npm run typecheck -ws --if-present",
     "lint": "npm run lint -ws --if-present",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
     "clean": "rm -rf shared/dist server/dist client/dist"
   },
   "devDependencies": {

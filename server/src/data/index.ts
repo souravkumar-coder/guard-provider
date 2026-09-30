@@ -1,19 +1,23 @@
 import { config } from '../config.js';
 import type { DataSource } from './DataSource.js';
 import { MemoryDataSource } from './memory/MemoryDataSource.js';
+import { PrismaDataSource } from './prisma/PrismaDataSource.js';
 
 /**
- * Data-source factory. Adding a real database later means implementing
- * `DataSource` (e.g. `PrismaDataSource`) and registering it here — nothing
- * else in the codebase touches storage directly.
+ * Data-source factory. The API only ever depends on the `DataSource`
+ * interface, so switching persistence is a one-line change here:
+ *   - `memory`   → in-memory demo store (default, zero-config).
+ *   - `postgres` → PostgreSQL via Prisma (requires DATABASE_URL).
  */
 function createDataSource(kind: string): DataSource {
   switch (kind) {
     case 'memory':
       return new MemoryDataSource();
+    case 'postgres':
+      return new PrismaDataSource();
     default:
       throw new Error(
-        `[guard-provider] Unknown DATA_SOURCE "${kind}". Supported values: memory. See README for wiring a real database.`,
+        `[guard-provider] Unknown DATA_SOURCE "${kind}". Supported values: memory, postgres. See README for wiring a real database.`,
       );
   }
 }
