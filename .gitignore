@@ -16,4 +16,6 @@ build/
 .DS_Store
 coverage/
 
-/generated/prisma
+# The Prisma client is generated into server/src/generated/prisma and is
+# committed so the project builds without a network round-trip to fetch engines.
+# Regenerate it with `npm run db:generate` after changing prisma/schema.prisma.

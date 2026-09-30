@@ -1,13 +1,256 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// Guard Provider — Prisma schema (PostgreSQL).
+//
+// Mirrors the domain contracts in `shared/src/index.ts` and the storage
+// contract in `server/src/data/DataSource.ts`. The API only ever talks to the
+// `DataSource` interface, so `PrismaDataSource` maps these models to/from the
+// shared domain types (dates <-> ISO strings, enums 1:1, guard.serviceIds via
+// the GuardService join table).
+//
+// Docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider            = "prisma-client"
+  output              = "../server/src/generated/prisma"
+  runtime             = "nodejs"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+/* ── Enums (values match the shared string unions 1:1) ─────── */
+
+enum UserRole {
+  customer
+  guard
+  admin
+}
+
+enum AvailabilityStatus {
+  available
+  on_duty
+  unavailable
+}
+
+enum VerificationStatus {
+  unverified
+  pending
+  verified
+  rejected
+}
+
+enum RequestStatus {
+  pending
+  accepted
+  rejected
+  cancelled
+}
+
+enum BookingStatus {
+  confirmed
+  completed
+  cancelled
+}
+
+enum NotificationType {
+  request_new
+  request_accepted
+  request_rejected
+  booking_update
+  review_new
+  account_update
+  verification_update
+}
+
+/* ── Core entities ────────────────────────────────────────── */
+
+model User {
+  id           String   @id
+  name         String
+  email        String   @unique
+  phone        String
+  role         UserRole
+  avatarUrl    String?
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  customerProfile CustomerProfile?
+  guardProfile    GuardProfile?
+  notifications   AppNotification[]
+  savedGuards     SavedGuard[]
+
+  @@index([role])
+  @@map("users")
+}
+
+model CustomerProfile {
+  userId  String @id
+  address String
+  city    String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("customer_profiles")
+}
+
+model GuardProfile {
+  id                 String             @id
+  userId             String             @unique
+  title              String
+  about              String
+  city               String
+  serviceArea        String
+  experienceYears    Int
+  skills             String[]
+  languages          String[]
+  hourlyRate         Float
+  availability       AvailabilityStatus
+  verificationStatus VerificationStatus
+  rating             Float              @default(0)
+  reviewCount        Int                @default(0)
+  completedJobs      Int                @default(0)
+  createdAt          DateTime           @default(now())
+
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  services      GuardService[]
+  verifications VerificationRecord[]
+  savedBy       SavedGuard[]
+
+  @@index([city])
+  @@index([verificationStatus])
+  @@map("guard_profiles")
+}
+
+model Service {
+  id          String @id
+  name        String
+  slug        String @unique
+  description String
+  icon        String
+
+  guards GuardService[]
+
+  @@map("services")
+}
+
+/// Join table linking a guard profile to the services it offers.
+/// Source of truth for `GuardProfile.serviceIds` in the domain layer.
+model GuardService {
+  guardId   String
+  serviceId String
+
+  guard   GuardProfile @relation(fields: [guardId], references: [id], onDelete: Cascade)
+  service Service      @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@id([guardId, serviceId])
+  @@index([serviceId])
+  @@map("guard_services")
+}
+
+model ServiceRequest {
+  id            String        @id
+  customerId    String
+  guardId       String
+  serviceId     String
+  requestedDate DateTime
+  durationHours Int
+  location      String
+  requirements  String
+  status        RequestStatus
+  rejectReason  String?
+  createdAt     DateTime      @default(now())
+  respondedAt   DateTime?
+
+  booking Booking?
+
+  @@index([customerId])
+  @@index([guardId])
+  @@index([status])
+  @@map("service_requests")
+}
+
+model Booking {
+  id            String        @id
+  requestId     String        @unique
+  customerId    String
+  guardId       String
+  serviceId     String
+  scheduledDate DateTime
+  durationHours Int
+  location      String
+  requirements  String
+  status        BookingStatus
+  cancelReason  String?
+  createdAt     DateTime      @default(now())
+  completedAt   DateTime?
+
+  request ServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([guardId])
+  @@index([status])
+  @@map("bookings")
+}
+
+model Review {
+  id         String   @id
+  bookingId  String
+  customerId String
+  guardId    String
+  rating     Int
+  comment    String
+  createdAt  DateTime @default(now())
+
+  @@index([guardId])
+  @@index([bookingId])
+  @@map("reviews")
+}
+
+model VerificationRecord {
+  id         String             @id
+  guardId    String
+  status     VerificationStatus
+  notes      String
+  documents  String[]
+  reviewedBy String?
+  reviewedAt DateTime?
+  createdAt  DateTime           @default(now())
+
+  guard GuardProfile @relation(fields: [guardId], references: [id], onDelete: Cascade)
+
+  @@index([guardId])
+  @@map("verification_records")
+}
+
+model AppNotification {
+  id        String           @id
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  read      Boolean          @default(false)
+  link      String?
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("notifications")
+}
+
+model SavedGuard {
+  id        String   @id
+  userId    String
+  guardId   String
+  createdAt DateTime @default(now())
+
+  user  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guard GuardProfile @relation(fields: [guardId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, guardId])
+  @@index([userId])
+  @@index([guardId])
+  @@map("saved_guards")
 }

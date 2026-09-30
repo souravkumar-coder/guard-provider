@@ -251,26 +251,55 @@ Statuses: request `pending → accepted | rejected | cancelled`;
 booking `confirmed → completed | cancelled`;
 verification `unverified → pending → verified | rejected`.
 
-## Swapping in a real database
+## Database (PostgreSQL via Prisma)
 
-The API is deliberately database-agnostic:
+The API is database-agnostic — it depends only on the `DataSource` interface in
+`server/src/data/DataSource.ts`. Two implementations ship today:
 
-1. Implement the `DataSource` interface from `server/src/data/DataSource.ts`
-   (e.g. `PrismaDataSource` backed by Postgres, or Mongoose for MongoDB). Each
-   repository (users, guards, requests, bookings, reviews, notifications,
-   verifications, services) already documents exactly which operations the
-   business layer needs — all async signatures, ready for real I/O.
-2. Register it in `server/src/data/index.ts`:
+| `DATA_SOURCE` | Implementation | Notes |
+| ------------- | -------------- | ----- |
+| `memory` (default) | `MemoryDataSource` | Zero-config in-memory store, reseeded on boot |
+| `postgres` | `PrismaDataSource` | PostgreSQL via Prisma driver adapters (`@prisma/adapter-pg`) |
 
-   ```ts
-   case 'postgres':
-     return new PrismaDataSource(process.env.DATABASE_URL!);
+### Running against PostgreSQL
+
+1. Provision PostgreSQL and create a database, e.g. `guard_provider`.
+2. Configure the environment (repo-root `.env`):
+
+   ```bash
+   DATA_SOURCE=postgres
+   DATABASE_URL="postgresql://USER:PASSWORD@localhost:5432/guard_provider?schema=public"
    ```
 
-3. Add `DATA_SOURCE=postgres` + `DATABASE_URL=…` to `.env`.
+3. Generate the client and apply migrations:
 
-No route, service, or client code changes are required. The in-memory
-implementation doubles as the reference for query semantics.
+   ```bash
+   npm run db:generate      # prisma generate  → server/src/generated/prisma
+   npm run db:migrate:deploy # prisma migrate deploy (apply prisma/migrations)
+   ```
+
+4. Start the API. On first boot against an empty database it seeds the same
+   demo dataset used by the in-memory store (`SEED_DEMO_DATA=true`):
+
+   ```bash
+   npm run build && npm start
+   ```
+
+The Prisma schema lives in `prisma/schema.prisma` and models every entity the
+domain needs — `User`, `CustomerProfile`, `GuardProfile`, `Service`,
+`GuardService` (join table for a guard's services), `ServiceRequest`, `Booking`,
+`Review`, `VerificationRecord`, `AppNotification` and `SavedGuard`. The initial
+migration is `prisma/migrations/20260930090000_init`.
+
+`PrismaDataSource` maps Prisma rows to the shared domain types (e.g.
+`DateTime ↔ ISO string`, and `GuardProfile.serviceIds ↔ guard_services` rows),
+so **no route, service, DTO or client code changes are required** to switch
+data sources — the in-memory implementation doubles as the reference for query
+semantics.
+
+> The generated Prisma client (`server/src/generated/prisma`) is committed so
+> the project type-checks and builds without a network round-trip; regenerate it
+> with `npm run db:generate` whenever the schema changes.
 
 ## Design notes
 
@@ -280,4 +309,4 @@ implementation doubles as the reference for query semantics.
 
 ---
 
-Built as a portfolio-grade demo. Frontend, API, auth, workflows and tests of logic are fully functional; storage is in-memory by design until a database is provisioned.
+Built as a portfolio-grade demo. Frontend, API, auth, workflows and tests of logic are fully functional. Storage runs on an in-memory store out of the box (`DATA_SOURCE=memory`) and on PostgreSQL via Prisma when configured (`DATA_SOURCE=postgres`).

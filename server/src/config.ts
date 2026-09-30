@@ -19,6 +19,7 @@ export const config = {
     .map((o) => o.trim())
     .filter(Boolean),
   dataSource: env('DATA_SOURCE', 'memory'),
+  databaseUrl: env('DATABASE_URL'),
   seedDemoData: env('SEED_DEMO_DATA', 'true') !== 'false',
 } as const;
 

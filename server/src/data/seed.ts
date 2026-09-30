@@ -1,6 +1,5 @@
 import type {
   AvailabilityStatus,
-  Review,
   Service,
   VerificationStatus,
 } from '@guard-provider/shared';
@@ -496,38 +495,12 @@ export async function seedDemoData(ds: DataSource): Promise<void> {
     }
   }
 
-  // Reviews for historical jobs (these also set guard ratings below)
-  const reviewsByGuard = new Map<string, Review[]>();
-  for (const r of REVIEWS) {
-    const guardId = guardProfileIds.get(r.guardKey)!;
-    const customerId = customerIds.get(r.customerKey)!;
-    const review = await ds.reviews.create({
-      bookingId: `seed_bkg_${r.guardKey}_${r.customerKey}_${r.daysAgo}`,
-      customerId,
-      guardId,
-      rating: r.rating,
-      comment: r.comment,
-      createdAt: daysAgoIso(r.daysAgo),
-    });
-    const list = reviewsByGuard.get(r.guardKey) ?? [];
-    list.push(review);
-    reviewsByGuard.set(r.guardKey, list);
-  }
-
-  for (const g of GUARDS) {
-    const list = reviewsByGuard.get(g.key) ?? [];
-    if (list.length === 0) continue;
-    const avg = list.reduce((sum, r) => sum + r.rating, 0) / list.length;
-    await ds.guards.update(guardProfileIds.get(g.key)!, {
-      rating: Math.round(avg * 10) / 10,
-      reviewCount: list.length,
-    });
-  }
-
-  // Historical completed bookings (with reviews attached where defined)
+  // Historical completed bookings. Created BEFORE their reviews so each review
+  // can be persisted with the real booking id it belongs to — this keeps the
+  // seeder backend-agnostic (the in-memory store and Postgres/Prisma behave
+  // identically; no post-hoc mutation of returned rows).
   let historyIndex = 0;
-  const reviewByGuardCustomer = new Map<string, SeedReview>();
-  for (const r of REVIEWS) reviewByGuardCustomer.set(`${r.guardKey}:${r.customerKey}`, r);
+  const bookingIdByGuardCustomer = new Map<string, string>();
 
   for (const h of COMPLETED_HISTORY) {
     historyIndex += 1;
@@ -560,15 +533,40 @@ export async function seedDemoData(ds: DataSource): Promise<void> {
       createdAt: request.respondedAt ?? request.createdAt,
       completedAt: daysAgoIso(Math.max(h.daysAgo - 1, 0), historyIndex * 7),
     });
-    const linked = reviewByGuardCustomer.get(`${h.guardKey}:${h.customerKey}`);
-    if (linked) {
-      // Point the seeded review at the real booking it belongs to.
-      const reviews = await ds.reviews.listByGuard(guardId);
-      const match = reviews.find(
-        (rv) => rv.customerId === customerId && rv.comment === linked.comment,
-      );
-      if (match) match.bookingId = booking.id;
-    }
+    bookingIdByGuardCustomer.set(`${h.guardKey}:${h.customerKey}`, booking.id);
+  }
+
+  // Reviews for historical jobs. Each review points at the real completed
+  // booking when one exists; the few reviews without a matching booking keep a
+  // synthetic id (as before). Guard ratings are recomputed from these reviews.
+  const reviewCountByGuard = new Map<string, number>();
+  const ratingSumByGuard = new Map<string, number>();
+  for (const r of REVIEWS) {
+    const guardId = guardProfileIds.get(r.guardKey)!;
+    const customerId = customerIds.get(r.customerKey)!;
+    const bookingId =
+      bookingIdByGuardCustomer.get(`${r.guardKey}:${r.customerKey}`) ??
+      `seed_bkg_${r.guardKey}_${r.customerKey}_${r.daysAgo}`;
+    await ds.reviews.create({
+      bookingId,
+      customerId,
+      guardId,
+      rating: r.rating,
+      comment: r.comment,
+      createdAt: daysAgoIso(r.daysAgo),
+    });
+    reviewCountByGuard.set(r.guardKey, (reviewCountByGuard.get(r.guardKey) ?? 0) + 1);
+    ratingSumByGuard.set(r.guardKey, (ratingSumByGuard.get(r.guardKey) ?? 0) + r.rating);
+  }
+
+  for (const g of GUARDS) {
+    const count = reviewCountByGuard.get(g.key) ?? 0;
+    if (count === 0) continue;
+    const avg = (ratingSumByGuard.get(g.key) ?? 0) / count;
+    await ds.guards.update(guardProfileIds.get(g.key)!, {
+      rating: Math.round(avg * 10) / 10,
+      reviewCount: count,
+    });
   }
 
   // Current-cycle requests
